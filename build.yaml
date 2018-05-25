@@ -1,0 +1,51 @@
+---
+- hosts: localhost
+  connection: local
+  vars:
+    base_image: fedora:28
+    image_name: weechat 
+    container_engine: buildah
+    dockerhub_user: mklvr
+  tasks:
+  - name: Obtain base image and create a container out of it
+    command: 'buildah from --name {{ image_name }} docker://{{ base_image }}'
+    become: true
+    when: container_engine == 'buildah'
+
+  - name: Add the newly created container to the inventory
+    add_host:
+      hostname: '{{ image_name }}'
+      ansible_connection: '{{ container_engine }}'
+      ansible_python_interpreter: /usr/bin/python3
+
+  - name: Run the role in the container
+    delegate_to: '{{ image_name }}'
+    include_role:
+      name: '{{ image_name }}'
+      
+  - block:
+    - name: Configure the container
+      shell: |
+        export run_command="docker run -ti \
+                                       --name {{ image_name }} \
+                                       --user $LOGNAME \
+                                       --rm \
+                                       -e CONTAINER=true \
+                                       -e DISPLAY=unix$DISPLAY \
+                                       -e HOME=/home/$LOGNAME \
+                                       -e TERM=xterm-color \
+                                       -v /dev/bus/usb:/dev/bus/usb:z \
+                                       -v /etc/sudoers:/etc/sudoers:z \
+                                       -v /home/$LOGNAME/.config/weechat/:/home/$LOGNAME/.weechat/:z \
+                                       -v /tmp/.X11-unix:/tmp/.X11-unix \
+                                       mklvr/{{ image_name }} /usr/bin/weechat"
+
+
+        buildah config --author="Mike Oliver <mike@mklvr.io>" \
+                       --user="1000:1000" \
+                       --label RUN="$run_command"  \
+                       {{ image_name }} 
+
+    - name: Commit the container and make it an image
+      command: 'buildah commit --rm {{ image_name }} docker-daemon:{{ dockerhub_user }}/{{ image_name }}:latest'
+    when: container_engine == 'buildah'

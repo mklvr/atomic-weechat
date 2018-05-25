@@ -1,0 +1,25 @@
+---
+- name: Update the base packages
+  dnf:
+    name: '{{ item }}'
+    state: latest
+  with_items:
+    - '*'
+  delegate_to: '{{ image_name }}'
+
+- name: Update the base packages
+  dnf:
+    name: '{{ item }}'
+    state: latest
+  with_items:
+    - sudo
+    - weechat
+  delegate_to: '{{ image_name }}'
+
+- name: Create a user
+  user:
+    name: moliver
+    shell: /bin/bash
+    uid: 1000
+  delegate_to: '{{ image_name }}'
+
